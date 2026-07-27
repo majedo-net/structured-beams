@@ -6,10 +6,10 @@ The example here contains the code to optimize an axisymmetric metalens to gener
 The FDTD solver used is MEEP and runs in a Docker container.
 
 ### Dependencies
-Docker (or podman) is the only required dependency. On windows it is probably easiest to install (Docker desktop)[https://docs.docker.com/desktop/setup/install/windows-install/].
+Docker (or podman) is the only required dependency. On windows it is probably easiest to install [Docker desktop](https://docs.docker.com/desktop/setup/install/windows-install/).
 
 I've provided a Makefile as a simple way to make sure the frequently used commands are entered the same each time. In this case they are pretty simple so you could just type the commands from the Makefile into your shell, but in some cases when the arguments get longer this can be useful.
-To install make on windows, I have typically used the (Chocolatey package manager)[https://chocolatey.org/install]. 
+To install make on windows, I have typically used the [Chocolatey package manager](https://chocolatey.org/install). 
 Then GNU Make can be installed with `choco install make`. 
 On MacOS, the system installed make might work fine but the current version can also be installed using homebrew, then invoke `gmake` instead of `make`. 
 
