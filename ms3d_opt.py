@@ -264,7 +264,7 @@ if RUN_OPT:
     cur_beta = 1.2
     beta_scale = 2
     num_betas = 3
-    update_factor = 2
+    update_factor = 40
     ftol = 1e-5
     print('Starting Optimization')
     for iters in range(num_betas):
