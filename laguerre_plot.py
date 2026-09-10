@@ -8,8 +8,8 @@ from scipy.special import genlaguerre
 w_0 = 1.0  # Beam waist radius 
 lda = 1    # Wavelength (lambda)
 z_0 = 5.0  # Beam waist position
-l = 1      # Azimuthal mode index
-p = 1      # Radial mode index
+l = 5     # Azimuthal mode index
+p = 5     # Radial mode index
 propigation_distance = 10.0
 
 freq = 1/lda # Frequency
@@ -31,8 +31,8 @@ resolution=200 # Number of points along each axis
 
 z_slice = 5 #for now, I have put the xy slice at the beam waist #### THIS IS WHAT TO CHANGE TO GET THE XY AT A DIFFERENT Z SLICE ALONG THE BEAM
 w_slice = w_0*np.sqrt(1+((z_slice-z_0)/r_length)**2) 
-x_width=w_slice*1.2
-y_width=w_slice*1.2
+x_width=w_slice*(np.sqrt(2*p+np.abs(l)+1))      
+y_width=w_slice*(np.sqrt(2*p+np.abs(l)+1)) 
 x_set=np.linspace(-x_width,x_width,resolution)
 y_set=np.linspace(-y_width,y_width,resolution)
 arrayX,arrayY=np.meshgrid(x_set,y_set)
