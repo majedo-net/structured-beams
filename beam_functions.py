@@ -86,28 +86,40 @@ def hermite_xy(w_0,lda,z_0,z_slice,E_xo=1,m=1,n=1,resolution=200):
     return intensity_field, phase_field,arrayX,arrayY
 
 def ince_xy (w_0,lda,z_0,z_slice,E_xo=1,m=1,p=1,e_param=1,parity=0,resolution=200):
-    r_length = (np.pi*(w_0**2))/lda # Rayleigh length(helps determine how fast the beam diverges)
-    f_0 = w_0*np.sqrt(e_param/2)
-    z_rel=z_slice-z_0
-    w_slice = w_0*np.sqrt(1+((z_slice-z_0)/r_length)**2) 
-    f_z = f_0*w_slice/w_0 # focal parameter at slice
-    x_width=w_slice*(np.sqrt(2*p+1)) + f_z      
-    y_width=w_slice*(np.sqrt(2*p+1)) + f_z
-    x_set=np.linspace(-x_width,x_width,resolution)
-    y_set=np.linspace(-y_width,y_width,resolution)
-    arrayX,arrayY=np.meshgrid(x_set,y_set)
-    r_sq=arrayX**2 + arrayY**2
-    r=np.sqrt(r_sq)
-    z_scaled = (arrayX+1j*arrayY)/f_z
+    r_length = (np.pi * (w_0**2)) / lda  # Rayleigh length
+    f_0 = w_0 * np.sqrt(e_param / 2)  # Focal parameter at waist
+
+    # Establish Viewing Plane
+    resolution = 200  # Number of points along each axis
+
+    z_slice = 7  # XY slice propagation position
+    z_rel = z_slice - z_0
+    w_slice = w_0 * np.sqrt(1 + ((z_slice - z_0) / r_length) ** 2)
+    f_z = f_0 * w_slice / w_0  # Focal parameter at slice
+    x_width = w_slice * (np.sqrt(2 * p + 1))
+    y_width = w_slice * (np.sqrt(2 * p + 1))
+    x_set = np.linspace(-x_width, x_width, resolution)
+    y_set = np.linspace(-y_width, y_width, resolution)
+    arrayX, arrayY = np.meshgrid(x_set, y_set)
+    r_sq = arrayX**2 + arrayY**2
+
+    # Transform to elliptical coordinates
+    z_scaled = (arrayX + 1j * arrayY) / f_z
     cosh_transform = np.arccosh(z_scaled)
     xi = np.abs(np.real(cosh_transform))
     eta = np.imag(cosh_transform) % (2 * np.pi)
-    k = (2*np.pi)/lda
-    def ince_poly(p, m, e_param, xi, eta, parity=0):
-        """Calculates Ince polynomials for even-even or odd-odd modes.
 
-        parity=0 -> Even (C_p^m), parity=1 -> Odd (S_p^m)
-        """
+    # Parameters
+    E_xo = 1
+    k = (2 * np.pi) / lda
+
+
+    def ince_poly(p, m, e_param, xi, eta, parity=0):
+        """Calculates Ince polynomials C_p^m (parity=0) or S_p^m (parity=1)."""
+        if m < 0 or m > p:
+            raise ValueError(
+                f"m must satisfy 0 <= m <= p. Received m={m} and p={p}."
+            )
         if (p - m) % 2 != 0:
             raise ValueError(
                 "p and m must have the same parity (p - m must be even)."
@@ -117,7 +129,7 @@ def ince_xy (w_0,lda,z_0,z_slice,E_xo=1,m=1,p=1,e_param=1,parity=0,resolution=20
         is_even_mode = p % 2 == 0
 
         if is_even_mode:
-            if parity == 0:  # Even-Even C_p^m
+            if parity == 0:  # Even C_p^m
                 N = p // 2 + 1
                 M = np.zeros((N, N), dtype=float)
                 for r in range(N):
@@ -128,37 +140,41 @@ def ince_xy (w_0,lda,z_0,z_slice,E_xo=1,m=1,p=1,e_param=1,parity=0,resolution=20
                             factor *= 2
                         M[r, r + 1] = factor
                     if r > 0:
-                        M[r, r - 1] = q * (p - 2 * r + 2)  # Fixed index [r, r-1]
+                        M[r, r - 1] = q * (p - 2 * r + 2)
 
-                _, vec = np.linalg.eig(M)
-                A = vec[:, np.argsort(_)][:, m // 2]
+                vals, vec = np.linalg.eig(M)
+                vals, vec = np.real(vals), np.real(vec)
+                idx = np.argsort(vals)
+                A = vec[:, idx][:, m // 2]
                 A /= np.linalg.norm(A)
 
                 eta_term = sum(A[r] * np.cos(2 * r * eta) for r in range(N))
                 xi_term = sum(A[r] * np.cosh(2 * r * xi) for r in range(N))
 
-            else:  # Even-Even S_p^m (m >= 2)
+            else:  # Odd S_p^m (m >= 2)
                 if m == 0:
                     raise ValueError("Odd mode S_p^m does not exist for m = 0.")
                 N = p // 2
                 M = np.zeros((N, N), dtype=float)
-                for k in range(N):
-                    r = k + 1
-                    M[k, k] = (2 * r) ** 2
-                    if k < N - 1:
-                        M[k, k + 1] = q * (p + 2 * r + 2)
-                    if k > 0:
-                        M[k, k - 1] = q * (p - 2 * r + 2)  # Fixed index [k, k-1]
+                for k_idx in range(N):
+                    r = k_idx + 1
+                    M[k_idx, k_idx] = (2 * r) ** 2
+                    if k_idx < N - 1:
+                        M[k_idx, k_idx + 1] = q * (p + 2 * r + 2)
+                    if k_idx > 0:
+                        M[k_idx, k_idx - 1] = q * (p - 2 * r + 2)
 
-                _, vec = np.linalg.eig(M)
-                B = vec[:, np.argsort(_)][:, (m // 2) - 1]
+                vals, vec = np.linalg.eig(M)
+                vals, vec = np.real(vals), np.real(vec)
+                idx = np.argsort(vals)
+                B = vec[:, idx][:, (m // 2) - 1]
                 B /= np.linalg.norm(B)
 
                 eta_term = sum(
-                    B[k] * np.sin(2 * (k + 1) * eta) for k in range(N)
+                    B[k_idx] * np.sin(2 * (k_idx + 1) * eta) for k_idx in range(N)
                 )
                 xi_term = sum(
-                    B[k] * np.sinh(2 * (k + 1) * xi) for k in range(N)
+                    B[k_idx] * np.sinh(2 * (k_idx + 1) * xi) for k_idx in range(N)
                 )
 
         else:
@@ -166,16 +182,18 @@ def ince_xy (w_0,lda,z_0,z_slice,E_xo=1,m=1,p=1,e_param=1,parity=0,resolution=20
             N = (p + 1) // 2
             M = np.zeros((N, N), dtype=float)
 
-            if parity == 0:  # Odd-Odd C_p^m
+            if parity == 0:  # Odd C_p^m
                 for r in range(N):
                     M[r, r] = (2 * r + 1) ** 2 + (q if r == 0 else 0)
                     if r < N - 1:
                         M[r, r + 1] = q * (p + 2 * r + 3)
                     if r > 0:
-                        M[r, r - 1] = q * (p - 2 * r + 1)  # Fixed index [r, r-1]
+                        M[r, r - 1] = q * (p - 2 * r + 1)
 
-                _, vec = np.linalg.eig(M)
-                A = vec[:, np.argsort(_)][:, (m - 1) // 2]
+                vals, vec = np.linalg.eig(M)
+                vals, vec = np.real(vals), np.real(vec)
+                idx = np.argsort(vals)
+                A = vec[:, idx][:, (m - 1) // 2]
                 A /= np.linalg.norm(A)
 
                 eta_term = sum(
@@ -185,16 +203,18 @@ def ince_xy (w_0,lda,z_0,z_slice,E_xo=1,m=1,p=1,e_param=1,parity=0,resolution=20
                     A[r] * np.cosh((2 * r + 1) * xi) for r in range(N)
                 )
 
-            else:  # Odd-Odd S_p^m
+            else:  # Odd S_p^m
                 for r in range(N):
                     M[r, r] = (2 * r + 1) ** 2 - (q if r == 0 else 0)
                     if r < N - 1:
                         M[r, r + 1] = q * (p + 2 * r + 3)
                     if r > 0:
-                        M[r, r - 1] = q * (p - 2 * r + 1)  # Fixed index [r, r-1]
+                        M[r, r - 1] = q * (p - 2 * r + 1)
 
-                _, vec = np.linalg.eig(M)
-                B = vec[:, np.argsort(_)][:, (m - 1) // 2]
+                vals, vec = np.linalg.eig(M)
+                vals, vec = np.real(vals), np.real(vec)
+                idx = np.argsort(vals)
+                B = vec[:, idx][:, (m - 1) // 2]
                 B /= np.linalg.norm(B)
 
                 eta_term = sum(
@@ -205,116 +225,21 @@ def ince_xy (w_0,lda,z_0,z_slice,E_xo=1,m=1,p=1,e_param=1,parity=0,resolution=20
                 )
 
         return eta_term, xi_term
-        """Calculates Ince polynomials for even-even or odd-odd modes.
 
-        parity=0 -> Even (C_p^m), parity=1 -> Odd (S_p^m)
-        """
-        if (p - m) % 2 != 0:
-            raise ValueError("p and m must have the same parity (p - m must be even).")
 
-        q = e_param / 2.0
-        is_even_mode = p % 2 == 0
-
-        if is_even_mode:
-            if parity == 0:  # Even-Even C_p^m
-                N = p // 2 + 1
-                M = np.zeros((N, N), dtype=float)
-                for r in range(N):
-                    M[r, r] = (2 * r) ** 2
-                    if r < N - 1:
-                        factor = q * (p + 2 * r + 2)
-                        if r == 0:
-                            factor *= 2
-                        M[r, r + 1] = factor
-                    if r > 0:
-                        M[r - 1, r] = q * (p - 2 * r + 2)
-
-                _, vec = np.linalg.eig(M)
-                A = vec[:, np.argsort(_)][:, m // 2]
-                A /= np.linalg.norm(A)
-
-                eta_term = sum(A[r] * np.cos(2 * r * eta) for r in range(N))
-                xi_term = sum(A[r] * np.cosh(2 * r * xi) for r in range(N))
-
-            else:  # Even-Even S_p^m (m >= 2)
-                if m == 0:
-                    raise ValueError("Odd mode S_p^m does not exist for m = 0.")
-                N = p // 2
-                M = np.zeros((N, N), dtype=float)
-                for k in range(N):
-                    r = k + 1  # Harmonic index
-                    M[k, k] = (2 * r) ** 2
-                    if k < N - 1:
-                        M[k, k + 1] = q * (p + 2 * r + 2)
-                    if k > 0:
-                        M[k - 1, k] = q * (p - 2 * r + 2)
-
-                _, vec = np.linalg.eig(M)
-                B = vec[:, np.argsort(_)][:, (m // 2) - 1]
-                B /= np.linalg.norm(B)
-
-                eta_term = sum(
-                    B[k] * np.sin(2 * (k + 1) * eta) for k in range(N)
-                )
-                xi_term = sum(
-                    B[k] * np.sinh(2 * (k + 1) * xi) for k in range(N)
-                )
-
-        else:
-            # Odd-Odd modes (p odd, m odd)
-            N = (p + 1) // 2
-            M = np.zeros((N, N), dtype=float)
-
-            if parity == 0:  # Odd-Odd C_p^m
-                for r in range(N):
-                    M[r, r] = (2 * r + 1) ** 2 + (q if r == 0 else 0)
-                    if r < N - 1:
-                        M[r, r + 1] = q * (p + 2 * r + 3)
-                    if r > 0:
-                        M[r - 1, r] = q * (p - 2 * r + 1)
-
-                _, vec = np.linalg.eig(M)
-                A = vec[:, np.argsort(_)][:, (m - 1) // 2]
-                A /= np.linalg.norm(A)
-
-                eta_term = sum(
-                    A[r] * np.cos((2 * r + 1) * eta) for r in range(N)
-                )
-                xi_term = sum(
-                    A[r] * np.cosh((2 * r + 1) * xi) for r in range(N)
-                )
-
-            else:  # Odd-Odd S_p^m
-                for r in range(N):
-                    M[r, r] = (2 * r + 1) ** 2 - (q if r == 0 else 0)
-                    if r < N - 1:
-                        M[r, r + 1] = q * (p + 2 * r + 3)
-                    if r > 0:
-                        M[r - 1, r] = q * (p - 2 * r + 1)
-
-                _, vec = np.linalg.eig(M)
-                B = vec[:, np.argsort(_)][:, (m - 1) // 2]
-                B /= np.linalg.norm(B)
-
-                eta_term = sum(
-                    B[r] * np.sin((2 * r + 1) * eta) for r in range(N)
-                )
-                xi_term = sum(
-                    B[r] * np.sinh((2 * r + 1) * xi) for r in range(N)
-                )
-
-        return eta_term, xi_term
-    r_z_slice= np.inf if z_rel==0 else z_rel* (1+(r_length/z_rel)**2)
-    psiz = -(p+1)*np.atan2(z_rel,r_length) # computes mode-dependent Gouy Phase Shift
-    term1 = E_xo*w_0/w_slice
+    # Field evaluation
+    r_z_slice = np.inf if z_rel == 0 else z_rel * (1 + (r_length / z_rel) ** 2)
+    psiz = -(p + 1) * np.arctan2(z_rel, r_length)
+    term1 = E_xo * w_0 / w_slice
     C_eta, C_xi = ince_poly(p, m, e_param, xi, eta, parity=parity)
     ince_envelope = C_eta * C_xi
     term4 = np.exp(-r_sq / (w_slice**2))
     phase_curvature = 0 if z_rel == 0 else (k * r_sq) / (2 * r_z_slice)
-    term5 = np.exp(1j*(-k*z_slice+psiz+phase_curvature))
-    e_field_distribution = term1*ince_envelope*term4*term5
-    intensity_field=np.abs(e_field_distribution)**2
-    phase_field=np.angle(e_field_distribution)
+    term5 = np.exp(1j * (-k * z_slice + psiz + phase_curvature))
+
+    e_field_distribution = term1 * ince_envelope * term4 * term5
+    intensity_field = np.abs(e_field_distribution) ** 2
+    phase_field = np.angle(e_field_distribution)
     return intensity_field,phase_field,arrayX,arrayY
 
 
